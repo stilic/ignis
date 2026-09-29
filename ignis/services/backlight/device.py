@@ -1,9 +1,7 @@
 import os
 from ignis.gobject import IgnisGObject, IgnisProperty
 from ignis import utils
-from ignis.dbus import DBusProxy
 from .constants import SYS_BACKLIGHT
-from .util import get_session_path
 
 
 class BacklightDevice(IgnisGObject):
@@ -32,14 +30,6 @@ class BacklightDevice(IgnisGObject):
             callback=lambda x, path, event_type: self.__sync_brightness()
             if event_type != "changed"  # "changed" event is called multiple times
             else None,
-        )
-
-        self.__session_proxy = DBusProxy.new(
-            name="org.freedesktop.login1",
-            object_path=get_session_path(),
-            info=utils.load_interface_xml("org.freedesktop.login1.Session"),
-            interface_name="org.freedesktop.login1.Session",
-            bus_type="system",
         )
 
         self.__sync_brightness()
@@ -73,23 +63,17 @@ class BacklightDevice(IgnisGObject):
 
     @brightness.setter
     def brightness(self, value: int) -> None:
-        self.__session_proxy.SetBrightness(
-            "(ssu)",
-            "backlight",
-            self._device_name,
-            value,
-        )
+        value = max(0, min(value, self._max_brightness))
+
+        with open(self._PATH_TO_BRIGHTNESS, "w") as backlight_file:
+            backlight_file.write(str(value))
+
+        self.__sync_brightness()
 
     async def set_brightness_async(self, value: int) -> None:
-        """
-        Asynchronously set brightness.
+        value = max(0, min(value, self._max_brightness))
 
-        Args:
-            value: The value to set.
-        """
-        await self.__session_proxy.SetBrightnessAsync(
-            "(ssu)",
-            "backlight",
-            self._device_name,
-            value,
-        )
+        with open(self._PATH_TO_BRIGHTNESS, "w") as backlight_file:
+            backlight_file.write(str(value))
+
+        self.__sync_brightness()
